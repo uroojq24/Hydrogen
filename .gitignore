@@ -1,0 +1,11 @@
+node_modules
+/.cache
+/build
+/dist
+/public/build
+/.mf
+.env
+.env.*
+env_bk
+.shopify
+.react-router

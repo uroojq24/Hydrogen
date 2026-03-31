@@ -1,0 +1,254 @@
+import {CartForm, Money} from '@shopify/hydrogen';
+import {useEffect, useRef} from 'react';
+import {useFetcher} from 'react-router';
+
+/**
+ * @param {CartSummaryProps}
+ */
+export function CartSummary({cart, layout}) {
+  const className =
+    layout === 'page' ? 'cart-summary-page' : 'cart-summary-aside';
+
+  return (
+    <div aria-labelledby="cart-summary" className={className}>
+      <div className="cart-summary__inner">
+        <div className="cart-summary__header">
+          <h4 id="cart-summary">Summary</h4>
+          <p className="cart-summary__note">Shipping and taxes at checkout.</p>
+        </div>
+
+        <dl className="cart-summary__totals">
+          <div className="cart-summary__row">
+            <dt>Subtotal</dt>
+            <dd>
+              {cart?.cost?.subtotalAmount?.amount ? (
+                <Money data={cart?.cost?.subtotalAmount} />
+              ) : (
+                '-'
+              )}
+            </dd>
+          </div>
+          <div className="cart-summary__row cart-summary__row--total">
+            <dt>Total</dt>
+            <dd>
+              {cart?.cost?.totalAmount?.amount ? (
+                <Money data={cart?.cost?.totalAmount} />
+              ) : (
+                '-'
+              )}
+            </dd>
+          </div>
+        </dl>
+
+        <details className="cart-summary__details">
+          <summary>Discounts &amp; gift cards</summary>
+          <div className="cart-summary__details-body">
+            <CartDiscounts discountCodes={cart?.discountCodes} />
+            <CartGiftCard giftCardCodes={cart?.appliedGiftCards} />
+          </div>
+        </details>
+
+        <CartCheckoutActions checkoutUrl={cart?.checkoutUrl} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * @param {{checkoutUrl?: string}}
+ */
+function CartCheckoutActions({checkoutUrl}) {
+  if (!checkoutUrl) return null;
+
+  return (
+    <div className="cart-summary__actions">
+      <a href={checkoutUrl} target="_self" className="cart-checkout-btn">
+        Continue to checkout
+        <span aria-hidden className="cart-checkout-btn__arrow">
+          →
+        </span>
+      </a>
+      <p className="cart-summary__fineprint">
+        Secure checkout powered by Shopify.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * @param {{
+ *   discountCodes?: CartApiQueryFragment['discountCodes'];
+ * }}
+ */
+function CartDiscounts({discountCodes}) {
+  const codes =
+    discountCodes
+      ?.filter((discount) => discount.applicable)
+      ?.map(({code}) => code) || [];
+
+  return (
+    <div>
+      {/* Have existing discount, display it with a remove option */}
+      <dl hidden={!codes.length}>
+        <div>
+          <dt>Discount(s)</dt>
+          <UpdateDiscountForm>
+            <div className="cart-discount">
+              <code>{codes?.join(', ')}</code>
+              &nbsp;
+              <button type="submit" aria-label="Remove discount" className="cart-pill-btn">
+                Remove
+              </button>
+            </div>
+          </UpdateDiscountForm>
+        </div>
+      </dl>
+
+      {/* Show an input to apply a discount */}
+      <UpdateDiscountForm discountCodes={codes}>
+        <div className="cart-inline-form">
+          <label htmlFor="discount-code-input" className="sr-only">
+            Discount code
+          </label>
+          <input
+            id="discount-code-input"
+            type="text"
+            name="discountCode"
+            placeholder="Discount code"
+          />
+          &nbsp;
+          <button type="submit" aria-label="Apply discount code" className="cart-pill-btn">
+            Apply
+          </button>
+        </div>
+      </UpdateDiscountForm>
+    </div>
+  );
+}
+
+/**
+ * @param {{
+ *   discountCodes?: string[];
+ *   children: React.ReactNode;
+ * }}
+ */
+function UpdateDiscountForm({discountCodes, children}) {
+  return (
+    <CartForm
+      route="/cart"
+      action={CartForm.ACTIONS.DiscountCodesUpdate}
+      inputs={{
+        discountCodes: discountCodes || [],
+      }}
+    >
+      {children}
+    </CartForm>
+  );
+}
+
+/**
+ * @param {{
+ *   giftCardCodes: CartApiQueryFragment['appliedGiftCards'] | undefined;
+ * }}
+ */
+function CartGiftCard({giftCardCodes}) {
+  const giftCardCodeInput = useRef(null);
+  const giftCardAddFetcher = useFetcher({key: 'gift-card-add'});
+
+  useEffect(() => {
+    if (giftCardAddFetcher.data) {
+      giftCardCodeInput.current.value = '';
+    }
+  }, [giftCardAddFetcher.data]);
+
+  return (
+    <div>
+      {giftCardCodes && giftCardCodes.length > 0 && (
+        <dl>
+          <dt>Applied Gift Card(s)</dt>
+          {giftCardCodes.map((giftCard) => (
+            <RemoveGiftCardForm key={giftCard.id} giftCardId={giftCard.id}>
+              <div className="cart-discount">
+                <code>***{giftCard.lastCharacters}</code>
+                &nbsp;
+                <Money data={giftCard.amountUsed} />
+                &nbsp;
+                <button type="submit" className="cart-pill-btn">
+                  Remove
+                </button>
+              </div>
+            </RemoveGiftCardForm>
+          ))}
+        </dl>
+      )}
+
+      <AddGiftCardForm fetcherKey="gift-card-add">
+        <div className="cart-inline-form">
+          <input
+            type="text"
+            name="giftCardCode"
+            placeholder="Gift card code"
+            ref={giftCardCodeInput}
+          />
+          &nbsp;
+          <button
+            type="submit"
+            disabled={giftCardAddFetcher.state !== 'idle'}
+            className="cart-pill-btn"
+          >
+            Apply
+          </button>
+        </div>
+      </AddGiftCardForm>
+    </div>
+  );
+}
+
+/**
+ * @param {{
+ *   fetcherKey?: string;
+ *   children: React.ReactNode;
+ * }}
+ */
+function AddGiftCardForm({fetcherKey, children}) {
+  return (
+    <CartForm
+      fetcherKey={fetcherKey}
+      route="/cart"
+      action={CartForm.ACTIONS.GiftCardCodesAdd}
+    >
+      {children}
+    </CartForm>
+  );
+}
+
+/**
+ * @param {{
+ *   giftCardId: string;
+ *   children: React.ReactNode;
+ * }}
+ */
+function RemoveGiftCardForm({giftCardId, children}) {
+  return (
+    <CartForm
+      route="/cart"
+      action={CartForm.ACTIONS.GiftCardCodesRemove}
+      inputs={{
+        giftCardCodes: [giftCardId],
+      }}
+    >
+      {children}
+    </CartForm>
+  );
+}
+
+/**
+ * @typedef {{
+ *   cart: OptimisticCart<CartApiQueryFragment | null>;
+ *   layout: CartLayout;
+ * }} CartSummaryProps
+ */
+
+/** @typedef {import('storefrontapi.generated').CartApiQueryFragment} CartApiQueryFragment */
+/** @typedef {import('~/components/CartMain').CartLayout} CartLayout */
+/** @typedef {import('@shopify/hydrogen').OptimisticCart} OptimisticCart */
